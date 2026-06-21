@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+venv/
+.venv/
+env/
+ENV/
+
+# Environment
+.env
+
+# ChromaDB
+chroma_db/
+*.db
+
+# Node
+node_modules/
+dist/
+.npm
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
