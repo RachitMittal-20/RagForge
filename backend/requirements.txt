@@ -11,3 +11,6 @@ pypdf2
 python-docx
 groq
 langchain-groq
+ragas==0.2.15
+datasets
+langchain-openai

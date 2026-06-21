@@ -2,6 +2,8 @@ import time
 
 from app.core.retriever import retrieve_context
 from app.core.generator import generate_answer
+from app.evaluation.ragas_eval import evaluate_response
+from app.evaluation.custom_metrics import calculate_custom_metrics
 
 
 def run_query(query: str, top_k: int = 5) -> dict:
@@ -14,6 +16,9 @@ def run_query(query: str, top_k: int = 5) -> dict:
     generation_result = generate_answer(query, chunks)
     generation_latency_ms = generation_result["generation_latency_ms"]
 
+    answer = generation_result["answer"]
+    contexts = [chunk["content"] for chunk in chunks]
+
     sources = [
         {
             "content": chunk["content"],
@@ -23,9 +28,15 @@ def run_query(query: str, top_k: int = 5) -> dict:
         for chunk in chunks
     ]
 
+    # Step 3: Evaluate — both are non-blocking; failures return sentinel values
+    ragas_scores = evaluate_response(query, answer, contexts)
+    custom_scores = calculate_custom_metrics(
+        query, answer, contexts, generation_result
+    )
+
     return {
         "query": query,
-        "answer": generation_result["answer"],
+        "answer": answer,
         "sources": sources,
         "metrics": {
             "retrieval_latency_ms": retrieval_latency_ms,
@@ -34,4 +45,5 @@ def run_query(query: str, top_k: int = 5) -> dict:
             "input_tokens": generation_result["input_tokens"],
             "output_tokens": generation_result["output_tokens"],
         },
+        "eval_scores": {**ragas_scores, **custom_scores},
     }
