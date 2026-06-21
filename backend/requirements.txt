@@ -11,6 +11,7 @@ pypdf2
 python-docx
 groq
 langchain-groq
+sqlalchemy
 ragas==0.2.15
 datasets
 langchain-openai
