@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Activity, Zap, Clock, DollarSign } from 'lucide-react'
+import { Activity, Zap, Clock, DollarSign, RefreshCw } from 'lucide-react'
 import ScoreCard from '../components/ScoreCard'
 import { getMetricsSummary, getQueryHistory } from '../services/api'
 
@@ -26,21 +26,36 @@ function formatDate(iso) {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+const CHART_TOOLTIP = {
+  contentStyle: { background: '#1f2937', border: '1px solid #374151', borderRadius: 8 },
+  labelStyle: { color: '#f9fafb' },
+  itemStyle: { color: '#d1d5db' },
+}
+
 export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
+  const fetchData = useCallback((isRefresh = false) => {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
+    setError(null)
     Promise.all([getMetricsSummary(), getQueryHistory(10)])
       .then(([sumRes, histRes]) => {
         setSummary(sumRes.data)
         setHistory(histRes.data)
       })
       .catch(() => setError('Failed to load dashboard data. Is the backend running?'))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        setRefreshing(false)
+      })
   }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
 
   const trendData = summary?.score_trend?.map((d) => ({
     date: d.date.slice(5),
@@ -48,11 +63,23 @@ export default function Dashboard() {
     'Answer Relevancy': d.avg_answer_relevancy,
   })) ?? []
 
+  const hasTrendData = trendData.some((d) => d.Faithfulness != null || d['Answer Relevancy'] != null)
+
   return (
     <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-400 text-sm mt-1">RAG pipeline performance overview</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-gray-400 text-sm mt-1">RAG pipeline performance overview</p>
+        </div>
+        <button
+          onClick={() => fetchData(true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-gray-800 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
       {error && (
@@ -102,17 +129,17 @@ export default function Dashboard() {
         <h2 className="text-base font-semibold text-white mb-6">Score Trend (Last 7 Days)</h2>
         {loading ? (
           <div className="h-56 bg-gray-700/40 rounded-lg animate-pulse" />
+        ) : !hasTrendData ? (
+          <div className="h-56 flex items-center justify-center">
+            <p className="text-gray-500 text-sm">No score data yet. Run some queries in the Playground to see trends.</p>
+          </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={trendData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 1]} tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
-                labelStyle={{ color: '#f9fafb' }}
-                itemStyle={{ color: '#d1d5db' }}
-              />
+              <Tooltip {...CHART_TOOLTIP} />
               <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
               <Line type="monotone" dataKey="Faithfulness" stroke="#10b981" strokeWidth={2} dot={false} connectNulls />
               <Line type="monotone" dataKey="Answer Relevancy" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />

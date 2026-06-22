@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Upload, FileText, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { Upload, FileText, Loader2 } from 'lucide-react'
 import { getDocuments, uploadDocument } from '../services/api'
+import Toast, { useToast } from '../components/Toast'
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -17,9 +18,9 @@ export default function Documents() {
 
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState(null) // { ok: bool, message: string }
 
   const fileInputRef = useRef(null)
+  const { toasts, toast, dismiss } = useToast()
 
   const fetchDocs = () => {
     setLoadingDocs(true)
@@ -34,33 +35,26 @@ export default function Documents() {
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      setUploadStatus(null)
-    }
+    if (file) setSelectedFile(file)
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     const file = e.dataTransfer.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      setUploadStatus(null)
-    }
+    if (file) setSelectedFile(file)
   }
 
   const handleUpload = async () => {
     if (!selectedFile || uploading) return
     setUploading(true)
-    setUploadStatus(null)
     try {
       const res = await uploadDocument(selectedFile)
-      setUploadStatus({ ok: true, message: `"${res.data.filename}" ingested — ${res.data.total_chunks} chunks` })
+      toast(`"${res.data.filename}" ingested — ${res.data.total_chunks} chunks`, 'success')
       setSelectedFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       fetchDocs()
     } catch (err) {
-      setUploadStatus({ ok: false, message: err.response?.data?.detail ?? 'Upload failed.' })
+      toast(err.response?.data?.detail ?? 'Upload failed.', 'error')
     } finally {
       setUploading(false)
     }
@@ -112,13 +106,6 @@ export default function Documents() {
           {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
           {uploading ? 'Uploading…' : 'Upload Document'}
         </button>
-
-        {uploadStatus && (
-          <div className={`flex items-center gap-2 text-sm rounded-xl px-4 py-3 ${uploadStatus.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-            {uploadStatus.ok ? <CheckCircle2 size={16} /> : <XCircle size={16} />}
-            {uploadStatus.message}
-          </div>
-        )}
       </div>
 
       {/* Documents table */}
@@ -126,7 +113,7 @@ export default function Documents() {
         <h2 className="text-sm font-semibold text-gray-300 mb-4">Corpus ({loadingDocs ? '…' : docs.length})</h2>
 
         {fetchError && (
-          <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">{fetchError}</div>
+          <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-4">{fetchError}</div>
         )}
 
         {loadingDocs ? (
@@ -167,6 +154,8 @@ export default function Documents() {
           </div>
         )}
       </div>
+
+      <Toast toasts={toasts} dismiss={dismiss} />
     </div>
   )
 }

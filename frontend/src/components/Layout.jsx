@@ -11,9 +11,13 @@ const navItems = [
 export default function Layout() {
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <aside className="w-64 flex-shrink-0 bg-gray-950 flex flex-col border-r border-gray-800">
-        <div className="px-6 py-5 border-b border-gray-800">
+      <aside className="w-64 shrink-0 bg-gray-950 flex flex-col border-r border-gray-800">
+        <div className="px-6 py-5 border-b border-gray-800 flex items-center gap-2.5">
           <span className="text-xl font-bold text-emerald-400">🔥 RagForge</span>
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
           {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -34,6 +38,9 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="px-6 py-4 border-t border-gray-800">
+          <span className="text-xs text-gray-600">v1.0.0</span>
+        </div>
       </aside>
       <main className="flex-1 bg-gray-900 overflow-auto">
         <Outlet />
