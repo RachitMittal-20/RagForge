@@ -15,3 +15,4 @@ sqlalchemy
 ragas==0.2.15
 datasets
 langchain-openai
+python-multipart
