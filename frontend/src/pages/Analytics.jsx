@@ -3,33 +3,23 @@ import {
   BarChart, Bar, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import AnimatedBadge from '../components/AnimatedBadge'
+import GlowButton from '../components/GlowButton'
 import { getQueryHistory, getMetricsSummary } from '../services/api'
-
-const CHART_TOOLTIP = {
-  contentStyle: { background: '#1f2937', border: '1px solid #374151', borderRadius: 8 },
-  labelStyle: { color: '#f9fafb' },
-  itemStyle: { color: '#d1d5db' },
-}
-const AXIS_TICK = { fill: '#9ca3af', fontSize: 12 }
-const GRID_STROKE = '#374151'
 
 const PAGE_SIZE = 10
 
-function scoreBadge(score) {
-  if (score == null || score < 0)
-    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-700 text-gray-400">N/A</span>
-  if (score >= 0.7)
-    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400">{score.toFixed(2)}</span>
-  if (score >= 0.4)
-    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">{score.toFixed(2)}</span>
-  return <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">{score.toFixed(2)}</span>
+const TT = {
+  contentStyle: { background: '#16161f', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, fontSize: 12, color: '#f8fafc' },
+  labelStyle: { color: '#94a3b8', marginBottom: 4 },
+  itemStyle: { color: '#cbd5e1' },
 }
+const AX = { fill: '#475569', fontSize: 11 }
+const GRID = 'rgba(255,255,255,0.04)'
 
 function formatDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function trunc(str, n) {
@@ -37,26 +27,7 @@ function trunc(str, n) {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
 
-function ChartCard({ title, children, height = 220 }) {
-  return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-      <h2 className="text-base font-semibold text-white mb-6">{title}</h2>
-      <ResponsiveContainer width="100%" height={height}>
-        {children}
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function EmptyChart({ message = 'No data yet.' }) {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <p className="text-gray-500 text-sm">{message}</p>
-    </div>
-  )
-}
-
-function buildDistribution(history) {
+function buildDist(history) {
   const buckets = [
     { range: '0.0–0.2', min: 0, max: 0.2, count: 0 },
     { range: '0.2–0.4', min: 0.2, max: 0.4, count: 0 },
@@ -64,20 +35,53 @@ function buildDistribution(history) {
     { range: '0.6–0.8', min: 0.6, max: 0.8, count: 0 },
     { range: '0.8–1.0', min: 0.8, max: 1.01, count: 0 },
   ]
-  for (const row of history) {
-    if (row.faithfulness == null || row.faithfulness < 0) continue
-    const bucket = buckets.find((b) => row.faithfulness >= b.min && row.faithfulness < b.max)
-    if (bucket) bucket.count++
+  for (const r of history) {
+    if (r.faithfulness == null || r.faithfulness < 0) continue
+    const b = buckets.find((b) => r.faithfulness >= b.min && r.faithfulness < b.max)
+    if (b) b.count++
   }
   return buckets
 }
 
 function buildCumCost(history) {
-  let running = 0
-  return [...history].reverse().map((row, i) => {
-    running += row.cost_estimate_usd ?? 0
-    return { index: i + 1, cost: parseFloat(running.toFixed(6)) }
+  let acc = 0
+  return [...history].reverse().map((r, i) => {
+    acc += r.cost_estimate_usd ?? 0
+    return { index: i + 1, cost: parseFloat(acc.toFixed(6)) }
   })
+}
+
+/* Chart card with gradient left border */
+function ChartCard({ title, height = 220, children, empty }) {
+  return (
+    <div className="glass-card" style={{ borderRadius: 16, padding: 24 }}>
+      <div className="section-bar" style={{ marginBottom: 20 }}>
+        <h2 className="section-label">{title}</h2>
+      </div>
+      {empty ? (
+        <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No data yet.</p>
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={height}>
+          {children}
+        </ResponsiveContainer>
+      )}
+    </div>
+  )
+}
+
+function SkeletonCard() {
+  return (
+    <div className="glass-card shimmer" style={{ borderRadius: 16, height: 300 }} />
+  )
+}
+
+function latencyColor(ms) {
+  if (ms == null) return '#475569'
+  if (ms < 500) return '#10b981'
+  if (ms < 1500) return '#f59e0b'
+  return '#ef4444'
 }
 
 export default function Analytics() {
@@ -88,199 +92,195 @@ export default function Analytics() {
 
   useEffect(() => {
     Promise.all([getQueryHistory(100), getMetricsSummary()])
-      .then(([histRes]) => setHistory(histRes.data))
+      .then(([h]) => setHistory(h.data))
       .catch(() => setError('Failed to load analytics. Is the backend running?'))
       .finally(() => setLoading(false))
   }, [])
 
-  const distData = buildDistribution(history)
+  const distData = buildDist(history)
 
-  const latencyData = [...history].reverse().map((row, i) => ({
+  const latData = [...history].reverse().map((r, i) => ({
     index: i + 1,
-    Retrieval: row.retrieval_latency_ms != null ? Math.round(row.retrieval_latency_ms) : null,
-    Generation: row.generation_latency_ms != null ? Math.round(row.generation_latency_ms) : null,
+    Retrieval: r.retrieval_latency_ms != null ? Math.round(r.retrieval_latency_ms) : null,
+    Generation: r.generation_latency_ms != null ? Math.round(r.generation_latency_ms) : null,
   }))
 
-  const tokenData = [...history].reverse().map((row, i) => ({
+  const tokenData = [...history].reverse().map((r, i) => ({
     index: i + 1,
-    'Input tokens': row.input_tokens ?? 0,
-    'Output tokens': row.output_tokens ?? 0,
+    'Input': r.input_tokens ?? 0,
+    'Output': r.output_tokens ?? 0,
   }))
 
   const costData = buildCumCost(history)
 
   const totalPages = Math.ceil(history.length / PAGE_SIZE)
-  const pageRows = history.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
-
-  if (loading) {
-    return (
-      <div className="p-8 space-y-6">
-        <div className="h-8 w-48 bg-gray-800 rounded animate-pulse" />
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-            <div className="h-5 w-40 bg-gray-700 rounded mb-6 animate-pulse" />
-            <div className="h-52 bg-gray-700/40 rounded-lg animate-pulse" />
-          </div>
-        ))}
-      </div>
-    )
-  }
+  const pageRows = history.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
-    <div className="p-8 space-y-8">
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
-        <h1 className="text-2xl font-bold text-white">Analytics</h1>
-        <p className="text-gray-400 text-sm mt-1">Deep-dive into pipeline performance</p>
+        <h1 className="gradient-text" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 4 }}>
+          Analytics
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Deep-dive into pipeline performance</p>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '12px 16px', color: '#f87171', fontSize: 13 }}>
+          {error}
+        </div>
       )}
 
-      {/* Score Distribution */}
-      <ChartCard title="Score Distribution — Faithfulness">
-        {history.length === 0 ? (
-          <EmptyChart message="No queries yet to build a distribution." />
-        ) : (
-          <BarChart data={distData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-            <XAxis dataKey="range" tick={AXIS_TICK} axisLine={false} tickLine={false} />
-            <YAxis allowDecimals={false} tick={AXIS_TICK} axisLine={false} tickLine={false} />
-            <Tooltip {...CHART_TOOLTIP} />
-            <Bar dataKey="count" name="Queries" fill="#10b981" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        )}
-      </ChartCard>
-
-      {/* Latency Analysis */}
-      <ChartCard title="Latency Analysis (ms per Query)">
-        {latencyData.length === 0 ? (
-          <EmptyChart />
-        ) : (
-          <AreaChart data={latencyData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gRetrieval" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gGeneration" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-            <XAxis dataKey="index" tick={AXIS_TICK} axisLine={false} tickLine={false} label={{ value: 'Query #', position: 'insideBottomRight', fill: '#6b7280', fontSize: 11, dy: 10 }} />
-            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} />
-            <Tooltip {...CHART_TOOLTIP} />
-            <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-            <Area type="monotone" dataKey="Retrieval" stroke="#10b981" strokeWidth={2} fill="url(#gRetrieval)" connectNulls />
-            <Area type="monotone" dataKey="Generation" stroke="#3b82f6" strokeWidth={2} fill="url(#gGeneration)" connectNulls />
-          </AreaChart>
-        )}
-      </ChartCard>
-
-      {/* Token Usage */}
-      <ChartCard title="Token Usage per Query">
-        {tokenData.length === 0 ? (
-          <EmptyChart />
-        ) : (
-          <BarChart data={tokenData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-            <XAxis dataKey="index" tick={AXIS_TICK} axisLine={false} tickLine={false} />
-            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} />
-            <Tooltip {...CHART_TOOLTIP} />
-            <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-            <Bar dataKey="Input tokens" stackId="tokens" fill="#10b981" />
-            <Bar dataKey="Output tokens" stackId="tokens" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        )}
-      </ChartCard>
-
-      {/* Cumulative Cost */}
-      <ChartCard title="Cumulative Cost (USD)">
-        {costData.length === 0 ? (
-          <EmptyChart />
-        ) : (
-          <LineChart data={costData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
-            <XAxis dataKey="index" tick={AXIS_TICK} axisLine={false} tickLine={false} label={{ value: 'Query #', position: 'insideBottomRight', fill: '#6b7280', fontSize: 11, dy: 10 }} />
-            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v.toFixed(4)}`} width={72} />
-            <Tooltip {...CHART_TOOLTIP} formatter={(v) => [`$${v.toFixed(6)}`, 'Cumulative cost']} />
-            <Line type="monotone" dataKey="cost" stroke="#10b981" strokeWidth={2} dot={false} />
-          </LineChart>
-        )}
-      </ChartCard>
-
-      {/* Full Query History Table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-white">Full Query History</h2>
-          <span className="text-xs text-gray-500">{history.length} total</span>
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
+      ) : (
+        <>
+          {/* Score Distribution */}
+          <ChartCard title="Score Distribution — Faithfulness" empty={history.length === 0}>
+            <BarChart data={distData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gBar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.9} />
+                  <stop offset="95%" stopColor="#7c3aed" stopOpacity={0.4} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="range" tick={AX} axisLine={false} tickLine={false} />
+              <YAxis allowDecimals={false} tick={AX} axisLine={false} tickLine={false} />
+              <Tooltip {...TT} />
+              <Bar dataKey="count" name="Queries" fill="url(#gBar)" radius={[5, 5, 0, 0]} />
+            </BarChart>
+          </ChartCard>
 
-        {history.length === 0 ? (
-          <p className="text-gray-500 text-sm py-8 text-center">No queries yet.</p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-gray-400 text-xs uppercase border-b border-gray-700">
-                    <th className="text-left pb-3 font-medium pr-4">Query</th>
-                    <th className="text-left pb-3 font-medium pr-4">Answer</th>
-                    <th className="text-left pb-3 font-medium">Faith.</th>
-                    <th className="text-left pb-3 font-medium">Relevancy</th>
-                    <th className="text-right pb-3 font-medium">Latency</th>
-                    <th className="text-right pb-3 font-medium">Cost</th>
-                    <th className="text-right pb-3 font-medium">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700/50">
-                  {pageRows.map((row) => (
-                    <tr key={row.id} className="hover:bg-gray-700/30 transition-colors">
-                      <td className="py-3 pr-4 text-gray-300 max-w-45">{trunc(row.query, 50)}</td>
-                      <td className="py-3 pr-4 text-gray-400 max-w-50">{trunc(row.answer, 80)}</td>
-                      <td className="py-3">{scoreBadge(row.faithfulness)}</td>
-                      <td className="py-3">{scoreBadge(row.answer_relevancy)}</td>
-                      <td className="py-3 text-right text-gray-400 whitespace-nowrap">
-                        {row.total_latency_ms != null ? `${Math.round(row.total_latency_ms)} ms` : '—'}
-                      </td>
-                      <td className="py-3 text-right text-gray-500 whitespace-nowrap">
-                        {row.cost_estimate_usd != null ? `$${row.cost_estimate_usd.toFixed(5)}` : '—'}
-                      </td>
-                      <td className="py-3 text-right text-gray-500 whitespace-nowrap">{formatDate(row.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Latency */}
+          <ChartCard title="Latency Analysis (ms per Query)" empty={latData.length === 0}>
+            <AreaChart data={latData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gLat1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#7c3aed" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#7c3aed" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gLat2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="index" tick={AX} axisLine={false} tickLine={false} />
+              <YAxis tick={AX} axisLine={false} tickLine={false} />
+              <Tooltip {...TT} />
+              <Legend wrapperStyle={{ fontSize: 11, color: '#64748b', paddingTop: 10 }} />
+              <Area type="monotone" dataKey="Retrieval" stroke="#7c3aed" strokeWidth={2} fill="url(#gLat1)" dot={false} connectNulls />
+              <Area type="monotone" dataKey="Generation" stroke="#06b6d4" strokeWidth={2} fill="url(#gLat2)" dot={false} connectNulls />
+            </AreaChart>
+          </ChartCard>
+
+          {/* Token Usage */}
+          <ChartCard title="Token Usage per Query" empty={tokenData.length === 0}>
+            <BarChart data={tokenData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="index" tick={AX} axisLine={false} tickLine={false} />
+              <YAxis tick={AX} axisLine={false} tickLine={false} />
+              <Tooltip {...TT} />
+              <Legend wrapperStyle={{ fontSize: 11, color: '#64748b', paddingTop: 10 }} />
+              <Bar dataKey="Input" stackId="t" fill="rgba(124,58,237,0.7)" />
+              <Bar dataKey="Output" stackId="t" fill="rgba(6,182,212,0.7)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ChartCard>
+
+          {/* Cumulative Cost */}
+          <ChartCard title="Cumulative Cost (USD)" empty={costData.length === 0}>
+            <LineChart data={costData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gCost" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} vertical={false} />
+              <XAxis dataKey="index" tick={AX} axisLine={false} tickLine={false} />
+              <YAxis tick={AX} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v.toFixed(4)}`} width={68} />
+              <Tooltip {...TT} formatter={(v) => [`$${v.toFixed(6)}`, 'Cumulative']} />
+              <Line type="monotone" dataKey="cost" stroke="#10b981" strokeWidth={2} dot={false}
+                style={{ filter: 'drop-shadow(0 0 4px rgba(16,185,129,0.5))' }} />
+            </LineChart>
+          </ChartCard>
+
+          {/* Full History Table */}
+          <div className="glass-card" style={{ borderRadius: 16, padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div className="section-bar">
+                <span className="section-label">Full Query History</span>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{history.length} total</span>
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
-                <span className="text-xs text-gray-500">
-                  Page {page + 1} of {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => p - 1)}
-                    disabled={page === 0}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => setPage((p) => p + 1)}
-                    disabled={page >= totalPages - 1}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
+            {history.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '32px 0' }}>No queries yet.</p>
+            ) : (
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      {['Query', 'Answer', 'Faith.', 'Relev.', 'Latency', 'Cost', 'Time'].map((h, i) => (
+                        <th key={h} className="section-label" style={{
+                          padding: '0 0 10px',
+                          textAlign: i >= 4 ? 'right' : 'left',
+                          paddingRight: i < 2 ? 12 : 0,
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <td style={{ padding: '10px 12px 10px 0', color: '#e2e8f0', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {trunc(row.query, 50)}
+                        </td>
+                        <td style={{ padding: '10px 12px 10px 0', color: '#64748b', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {trunc(row.answer, 70)}
+                        </td>
+                        <td style={{ padding: '10px 8px 10px 0' }}><AnimatedBadge score={row.faithfulness} /></td>
+                        <td style={{ padding: '10px 0' }}><AnimatedBadge score={row.answer_relevancy} /></td>
+                        <td style={{ padding: '10px 0', textAlign: 'right' }}>
+                          <span className="mono" style={{ color: latencyColor(row.total_latency_ms) }}>
+                            {row.total_latency_ms != null ? `${Math.round(row.total_latency_ms)} ms` : '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 0', textAlign: 'right' }}>
+                          <span className="mono" style={{ color: '#475569' }}>
+                            {row.cost_estimate_usd != null ? `$${row.cost_estimate_usd.toFixed(5)}` : '—'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {formatDate(row.created_at)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {totalPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Page {page + 1} of {totalPages}</span>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <GlowButton variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</GlowButton>
+                      <GlowButton variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next</GlowButton>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

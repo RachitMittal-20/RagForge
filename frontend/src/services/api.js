@@ -12,8 +12,12 @@ export const uploadDocument = (file) => {
   })
 }
 
-export const queryRAG = (query, topK = 5) =>
-  api.post('/api/query', { query, top_k: topK })
+export const queryRAG = (query, topK = 5, conversationHistory = []) =>
+  api.post('/api/query', {
+    query,
+    top_k: topK,
+    conversation_history: conversationHistory,
+  })
 
 export const getMetricsSummary = () => api.get('/api/metrics/summary')
 

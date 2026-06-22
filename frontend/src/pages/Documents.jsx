@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Upload, FileText, Loader2 } from 'lucide-react'
-import { getDocuments, uploadDocument } from '../services/api'
+import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import GlowButton from '../components/GlowButton'
 import Toast, { useToast } from '../components/Toast'
+import { getDocuments, uploadDocument } from '../services/api'
 
 function formatDate(iso) {
   if (!iso) return '—'
@@ -11,13 +12,17 @@ function formatDate(iso) {
   })
 }
 
+function Skeleton({ h = 10, radius = 8 }) {
+  return <div className="shimmer" style={{ height: h, borderRadius: radius }} />
+}
+
 export default function Documents() {
   const [docs, setDocs] = useState([])
   const [loadingDocs, setLoadingDocs] = useState(true)
   const [fetchError, setFetchError] = useState(null)
-
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
 
   const fileInputRef = useRef(null)
   const { toasts, toast, dismiss } = useToast()
@@ -33,13 +38,9 @@ export default function Documents() {
 
   useEffect(() => { fetchDocs() }, [])
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0]
-    if (file) setSelectedFile(file)
-  }
-
   const handleDrop = (e) => {
     e.preventDefault()
+    setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file) setSelectedFile(file)
   }
@@ -61,97 +62,154 @@ export default function Documents() {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 28 }}>
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Documents</h1>
-        <p className="text-gray-400 text-sm mt-1">Manage your document corpus</p>
+        <h1 className="gradient-text" style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.03em', marginBottom: 4 }}>
+          Documents
+        </h1>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Manage your document corpus</p>
       </div>
 
       {/* Upload zone */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-300">Upload Document</h2>
+      <div className="glass-card" style={{ borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="section-bar">
+          <span className="section-label">Upload Document</span>
+        </div>
 
+        {/* Drop zone — gradient border via layered pseudo-element trick using outline */}
         <div
           onClick={() => fileInputRef.current?.click()}
           onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          className="border-2 border-dashed border-gray-600 hover:border-emerald-500/60 rounded-xl p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors group"
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          style={{
+            position: 'relative',
+            borderRadius: 14,
+            padding: '36px 24px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            cursor: 'pointer',
+            transition: 'all 0.25s ease',
+            background: dragOver ? 'rgba(124,58,237,0.06)' : selectedFile ? 'rgba(16,185,129,0.04)' : 'transparent',
+            border: `2px dashed ${dragOver ? 'rgba(124,58,237,0.6)' : selectedFile ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.1)'}`,
+            boxShadow: dragOver ? '0 0 24px rgba(124,58,237,0.15), inset 0 0 24px rgba(124,58,237,0.05)' : 'none',
+          }}
         >
-          <Upload size={28} className="text-gray-500 group-hover:text-emerald-400 transition-colors" />
+          <div style={{
+            width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: selectedFile ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.1)',
+            boxShadow: selectedFile ? '0 0 16px rgba(16,185,129,0.3)' : '0 0 16px rgba(124,58,237,0.2)',
+            animation: dragOver ? 'bounceSub 0.6s ease' : 'none',
+            transition: 'all 0.25s ease',
+          }}>
+            {selectedFile
+              ? <CheckCircle2 size={22} style={{ color: '#10b981' }} />
+              : <Upload size={22} style={{ color: '#a78bfa' }} />
+            }
+          </div>
+
           {selectedFile ? (
-            <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-              <FileText size={16} />
-              {selectedFile.name}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981', fontSize: 13, fontWeight: 500, justifyContent: 'center' }}>
+                <FileText size={14} />
+                <span className="mono">{selectedFile.name}</span>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Click to change file</p>
             </div>
           ) : (
             <>
-              <p className="text-gray-400 text-sm">Click to select or drag &amp; drop</p>
-              <p className="text-gray-600 text-xs">PDF, DOCX, TXT supported</p>
+              <p style={{ fontSize: 13, color: '#94a3b8', fontWeight: 500 }}>
+                {dragOver ? 'Drop to upload' : 'Click to select or drag & drop'}
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>PDF · DOCX · TXT supported</p>
             </>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.docx,.txt"
-            className="hidden"
-            onChange={handleFileChange}
-          />
+          <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f) }} />
         </div>
 
-        <button
+        <GlowButton
           onClick={handleUpload}
-          disabled={!selectedFile || uploading}
-          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-500/40 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-xl transition-colors text-sm"
+          loading={uploading}
+          disabled={!selectedFile}
+          size="md"
         >
-          {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+          <Upload size={14} />
           {uploading ? 'Uploading…' : 'Upload Document'}
-        </button>
+        </GlowButton>
       </div>
 
       {/* Documents table */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4">Corpus ({loadingDocs ? '…' : docs.length})</h2>
+      <div className="glass-card" style={{ borderRadius: 16, padding: 24 }}>
+        <div className="section-bar" style={{ marginBottom: 16 }}>
+          <span className="section-label">Corpus ({loadingDocs ? '…' : docs.length})</span>
+        </div>
 
         {fetchError && (
-          <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-4">{fetchError}</div>
+          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', color: '#f87171', fontSize: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={14} />
+            {fetchError}
+          </div>
         )}
 
         {loadingDocs ? (
-          <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 bg-gray-700/40 rounded animate-pulse" />
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} h={36} />)}
           </div>
         ) : docs.length === 0 ? (
-          <p className="text-gray-500 text-sm py-8 text-center">No documents uploaded yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-400 text-xs uppercase border-b border-gray-700">
-                  <th className="text-left pb-3 font-medium">Filename</th>
-                  <th className="text-right pb-3 font-medium">Chunks</th>
-                  <th className="text-right pb-3 font-medium">Ingested At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700/50">
-                {docs.map((doc, i) => (
-                  <tr key={i} className="hover:bg-gray-700/30 transition-colors">
-                    <td className="py-3 flex items-center gap-2 text-gray-200">
-                      <FileText size={14} className="text-gray-500 shrink-0" />
-                      {doc.filename}
-                    </td>
-                    <td className="py-3 text-right">
-                      <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs font-medium">
-                        {doc.total_chunks}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right text-gray-500">{formatDate(doc.ingested_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: '40px 0', textAlign: 'center' }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: 'rgba(71,85,105,0.15)', border: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 12px',
+            }}>
+              <FileText size={20} style={{ color: '#475569' }} />
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No documents uploaded yet.</p>
           </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <th className="section-label" style={{ textAlign: 'left', padding: '0 0 10px' }}>Filename</th>
+                <th className="section-label" style={{ textAlign: 'right', padding: '0 0 10px' }}>Chunks</th>
+                <th className="section-label" style={{ textAlign: 'right', padding: '0 0 10px' }}>Ingested At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map((doc, i) => (
+                <tr
+                  key={i}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <td style={{ padding: '12px 0', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      width: 28, height: 28, borderRadius: 7,
+                      background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <FileText size={13} style={{ color: '#a78bfa' }} />
+                    </span>
+                    <span className="mono" style={{ fontSize: 12 }}>{doc.filename}</span>
+                  </td>
+                  <td style={{ padding: '12px 0', textAlign: 'right' }}>
+                    <span style={{
+                      background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)',
+                      color: '#06b6d4', fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 6,
+                    }}>
+                      {doc.total_chunks}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 0', textAlign: 'right', color: 'var(--text-muted)', fontSize: 12 }}>
+                    {formatDate(doc.ingested_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 

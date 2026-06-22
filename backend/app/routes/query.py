@@ -13,8 +13,9 @@ router = APIRouter(prefix="/api")
 
 @router.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
+    history = [m.model_dump() for m in request.conversation_history]
     try:
-        result = run_query(request.query, top_k=request.top_k)
+        result = run_query(request.query, top_k=request.top_k, conversation_history=history)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

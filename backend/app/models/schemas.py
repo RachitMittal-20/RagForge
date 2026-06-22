@@ -14,9 +14,15 @@ class DocumentInfo(BaseModel):
     ingested_at: str
 
 
+class ConversationMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
+    conversation_history: list[ConversationMessage] = []
 
 
 class SourceChunk(BaseModel):
@@ -52,3 +58,4 @@ class QueryResponse(BaseModel):
     sources: list[SourceChunk]
     metrics: QueryMetrics
     eval_scores: EvalScores
+    reformulated_query: str

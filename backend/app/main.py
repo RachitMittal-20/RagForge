@@ -29,3 +29,10 @@ async def startup():
 @app.get("/health")
 async def health():
     return {"status": "healthy", "project": "RagForge"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    # --loop asyncio disables uvloop, eliminating the RAGAs event-loop conflict.
+    # Use this when running directly: python -m app.main
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio")
